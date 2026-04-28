@@ -10,7 +10,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class RegisterUserRequest {
-    private String username;
+    private String namaLengkap;
     private String email;
     private String password;
+    private String institusi;
+    private String bio;
+    private String keahlian;
+    private String lokasi;
+    private String whatsapp;
 }

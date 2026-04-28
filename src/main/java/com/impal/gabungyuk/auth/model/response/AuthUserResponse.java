@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.model;
+package com.impal.gabungyuk.auth.model.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,8 +9,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class RegisterUserRequest {
+public class AuthUserResponse {
+    private Integer userId;
     private String username;
     private String email;
-    private String password;
+    private String token;
+    private Long expiredAt;
 }

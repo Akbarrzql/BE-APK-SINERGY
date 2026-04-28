@@ -1,6 +1,6 @@
-package com.impal.gabungyuk.controller;
+package com.impal.gabungyuk.core.controller;
 
-import com.impal.gabungyuk.model.ErrorResponse;
+import com.impal.gabungyuk.core.model.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,15 +1,15 @@
-package com.impal.gabungyuk.service;
+package com.impal.gabungyuk.core.service;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.impal.gabungyuk.entity.Project;
-import com.impal.gabungyuk.entity.User;
-import com.impal.gabungyuk.model.ProjectRequest;
-import com.impal.gabungyuk.model.ProjectResponse;
-import com.impal.gabungyuk.repository.ProjectRepository;
-import com.impal.gabungyuk.repository.UserRepository;
+import com.impal.gabungyuk.core.entity.Project;
+import com.impal.gabungyuk.auth.entity.User;
+import com.impal.gabungyuk.core.model.ProjectRequest;
+import com.impal.gabungyuk.core.model.ProjectResponse;
+import com.impal.gabungyuk.core.repository.ProjectRepository;
+import com.impal.gabungyuk.auth.respository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;

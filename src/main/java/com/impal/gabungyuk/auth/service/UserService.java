@@ -1,11 +1,12 @@
-package com.impal.gabungyuk.service;
+package com.impal.gabungyuk.auth.service;
 
-import com.impal.gabungyuk.entity.User;
-import com.impal.gabungyuk.model.AuthUserResponse;
-import com.impal.gabungyuk.model.LoginUserRequest;
-import com.impal.gabungyuk.model.RegisterUserRequest;
-import com.impal.gabungyuk.model.UpdateUserRequest;
-import com.impal.gabungyuk.repository.UserRepository;
+import com.impal.gabungyuk.auth.entity.User;
+import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
+import com.impal.gabungyuk.auth.model.request.LoginUserRequest;
+import com.impal.gabungyuk.auth.model.request.RegisterUserRequest;
+import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
+import com.impal.gabungyuk.auth.respository.UserRepository;
+import com.impal.gabungyuk.core.service.TokenService;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

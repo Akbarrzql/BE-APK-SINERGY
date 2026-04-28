@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.entity;
+package com.impal.gabungyuk.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

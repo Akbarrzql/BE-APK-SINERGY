@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.model;
+package com.impal.gabungyuk.core.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

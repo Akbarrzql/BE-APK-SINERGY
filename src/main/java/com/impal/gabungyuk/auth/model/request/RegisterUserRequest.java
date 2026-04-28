@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.model;
+package com.impal.gabungyuk.auth.model.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UpdateUserRequest {
+public class RegisterUserRequest {
     private String username;
     private String email;
     private String password;

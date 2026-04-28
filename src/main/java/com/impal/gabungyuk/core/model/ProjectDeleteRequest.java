@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.model;
+package com.impal.gabungyuk.core.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,10 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
-public class LoginUserRequest {
-    private String email;
-    private String password;
+public class ProjectDeleteRequest {
+    private Integer projectId;
 }

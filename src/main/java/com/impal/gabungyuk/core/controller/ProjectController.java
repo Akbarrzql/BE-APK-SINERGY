@@ -1,7 +1,10 @@
-package com.impal.gabungyuk.controller;
+package com.impal.gabungyuk.core.controller;
 
-import com.impal.gabungyuk.model.*;
-import com.impal.gabungyuk.service.ProjectService;
+import com.impal.gabungyuk.core.model.ProjectDeleteRequest;
+import com.impal.gabungyuk.core.model.ProjectRequest;
+import com.impal.gabungyuk.core.model.ProjectResponse;
+import com.impal.gabungyuk.core.model.SuccessResponse;
+import com.impal.gabungyuk.core.service.ProjectService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;

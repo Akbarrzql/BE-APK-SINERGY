@@ -1,14 +1,16 @@
-package com.impal.gabungyuk.model;
+package com.impal.gabungyuk.core.model;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ErrorResponse {
+@Builder
+public class SuccessResponse<T> {
     private int status;
-    private String error;
-    private String details;
+    private String message;
+    private T data;
 }

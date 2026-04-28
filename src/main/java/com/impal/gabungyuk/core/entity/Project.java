@@ -1,7 +1,8 @@
-package com.impal.gabungyuk.entity;
+package com.impal.gabungyuk.core.entity;
 
 import java.time.LocalDateTime;
 
+import com.impal.gabungyuk.auth.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,7 +22,7 @@ public class Project {
     //foregein key 
     @ManyToOne
     @JoinColumn(name = "id_pengguna")
-    private User user;  
+    private User user;
     
     @Column(name = "title", nullable = false)
     private String title;

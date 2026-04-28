@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.service;
+package com.impal.gabungyuk.core.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;

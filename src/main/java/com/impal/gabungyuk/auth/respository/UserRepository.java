@@ -1,6 +1,6 @@
-package com.impal.gabungyuk.repository;
+package com.impal.gabungyuk.auth.respository;
 
-import com.impal.gabungyuk.entity.User;
+import com.impal.gabungyuk.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

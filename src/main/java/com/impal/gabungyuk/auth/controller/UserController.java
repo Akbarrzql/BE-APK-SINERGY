@@ -1,7 +1,11 @@
-package com.impal.gabungyuk.controller;
+package com.impal.gabungyuk.auth.controller;
 
-import com.impal.gabungyuk.model.*;
-import com.impal.gabungyuk.service.UserService;
+import com.impal.gabungyuk.auth.model.request.LoginUserRequest;
+import com.impal.gabungyuk.auth.model.request.RegisterUserRequest;
+import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
+import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
+import com.impal.gabungyuk.core.model.SuccessResponse;
+import com.impal.gabungyuk.auth.service.UserService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 

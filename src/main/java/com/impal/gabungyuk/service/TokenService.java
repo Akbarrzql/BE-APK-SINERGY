@@ -27,27 +27,48 @@ public class TokenService {
     }
 
     public Integer extractUserIdFromAuthorizationHeader(String authorizationHeader) {
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
+        if (authorizationHeader == null || authorizationHeader.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing Authorization header");
         }
 
-        String token = authorizationHeader.substring(7).trim();
+        String token = authorizationHeader.trim();
+
+        // Accept both "Bearer <token>" and raw token values to be more tolerant to clients
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7).trim();
+        }
+
+        // strip possible surrounding quotes that some clients might include
+        if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+            token = token.substring(1, token.length() - 1).trim();
+        }
+
+        if (token.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing token");
+        }
+
         return extractUserIdFromToken(token);
     }
 
     private Integer extractUserIdFromToken(String token) {
         try {
             String decoded = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
-            String[] parts = decoded.split(":");
-            if (parts.length != 3) {
+
+            // parse token in a robust way: userId:expiredAt:signature
+            int firstColon = decoded.indexOf(':');
+            int lastColon = decoded.lastIndexOf(':');
+            if (firstColon == -1 || lastColon == -1 || firstColon == lastColon) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token");
             }
 
-            int userId = Integer.parseInt(parts[0]);
-            long expiredAt = Long.parseLong(parts[1]);
-            String signature = parts[2];
+            String userIdPart = decoded.substring(0, firstColon);
+            String expiredAtPart = decoded.substring(firstColon + 1, lastColon);
+            String signature = decoded.substring(lastColon + 1);
 
-            String payload = parts[0] + ":" + parts[1];
+            int userId = Integer.parseInt(userIdPart);
+            long expiredAt = Long.parseLong(expiredAtPart);
+
+            String payload = userIdPart + ":" + expiredAtPart;
             String expectedSignature = hmacSha256(payload);
 
             if (!expectedSignature.equals(signature)) {

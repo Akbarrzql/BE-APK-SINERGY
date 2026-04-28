@@ -36,11 +36,13 @@ public class ProjectController {
             produces = MediaType.APPLICATION_JSON_VALUE
     )
     public SuccessResponse<List<ProjectResponse>> getUserProjects(@RequestHeader("Authorization") String authorizationHeader) {
-        List<ProjectResponse> response = projectService.getAllProjectsByUser(authorizationHeader);
+        // Return all projects visible to any authenticated user (previous behavior returned only projects
+        // belonging to the authenticated user). This allows all verified users to view projects.
+        List<ProjectResponse> response = projectService.getAllProjectsForAuthenticatedUser(authorizationHeader);
 
         return SuccessResponse.<List<ProjectResponse>>builder()
                 .status(200)
-                .message("User projects retrieved successfully")
+                .message("Projects retrieved successfully")
                 .data(response)
                 .build();
     }
@@ -58,6 +60,35 @@ public class ProjectController {
         return SuccessResponse.<ProjectResponse>builder()
                 .status(200)
                 .message("Project updated successfully")
+                .data(response)
+                .build();
+    }
+
+    @GetMapping(
+            value = "/api/v1/projects",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public SuccessResponse<List<ProjectResponse>> getAllProjects(@RequestHeader("Authorization") String authorizationHeader) {
+        List<ProjectResponse> response = projectService.getAllProjectsForAuthenticatedUser(authorizationHeader);
+
+        return SuccessResponse.<List<ProjectResponse>>builder()
+                .status(200)
+                .message("All projects retrieved successfully")
+                .data(response)
+                .build();
+    }
+
+    @GetMapping(
+            value = "/api/v1/projects/{projectId}/view",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public SuccessResponse<ProjectResponse> viewProject(@PathVariable Integer projectId,
+                                                         @RequestHeader("Authorization") String authorizationHeader) {
+        ProjectResponse response = projectService.getProjectByIdForAuthenticatedUser(projectId, authorizationHeader);
+
+        return SuccessResponse.<ProjectResponse>builder()
+                .status(200)
+                .message("Project retrieved successfully")
                 .data(response)
                 .build();
     }

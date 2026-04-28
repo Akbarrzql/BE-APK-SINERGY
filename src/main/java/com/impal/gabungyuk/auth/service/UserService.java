@@ -25,19 +25,26 @@ public class UserService {
 
     @Transactional
     public AuthUserResponse register(RegisterUserRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
-        }
-
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
         User user = User.builder()
-                .username(request.getUsername())
+                .namaLengkap(request.getNamaLengkap())
                 .email(request.getEmail())
                 .password(request.getPassword())
+                // Tambahkan baris di bawah ini:
+                .institusi(request.getInstitusi())
+                .bio(request.getBio())
+                .keahlian(request.getKeahlian())
+                .lokasi(request.getLokasi())
+                .whatsapp(request.getWhatsapp())
                 .build();
+                // .namaLengkap(request.getNamaLengkap())//ini guat tambah
+                // // .username(request.getUsername())
+                // .email(request.getEmail())
+                // .password(request.getPassword())
+                // .build();
 
         User savedUser = userRepository.save(user);
         return buildAuthResponse(savedUser);
@@ -63,38 +70,51 @@ public class UserService {
 
         return AuthUserResponse.builder()
                 .userId(user.getIdPengguna())
-                .username(user.getUsername())
+                .namaLengkap(user.getNamaLengkap())
+                .profilePicture(user.getProfilePicture())//ini guat tambah
+                .institusi(user.getInstitusi())//ini guat tambah
+                .bio(user.getBio())//ini guat tambah
+                .keahlian(user.getKeahlian())//ini guat tambah
+                .lokasi(user.getLokasi())//ini guat tambah
+                .whatsapp(user.getWhatsapp())//ini guat tambah
+                // .username(user.getUsername()) punya lu bar
                 .email(user.getEmail())
                 .build();
     }
 
-    @Transactional
+ @Transactional
     public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request) {
         Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        boolean hasUsername = request.getUsername() != null && !request.getUsername().isBlank();
+        boolean hasNamaLengkap = request.getNamaLengkap() != null && !request.getNamaLengkap().isBlank();
         boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
         boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
+        boolean hasProfilePicture = request.getProfilePicture() != null && !request.getProfilePicture().isBlank();
+        boolean hasInstitusi = request.getInstitusi() != null && !request.getInstitusi().isBlank();
+        boolean hasBio = request.getBio() != null && !request.getBio().isBlank();
+        boolean hasKeahlian = request.getKeahlian() != null && !request.getKeahlian().isBlank();
+        boolean hasLokasi = request.getLokasi() != null && !request.getLokasi().isBlank();
+        boolean hasWhatsapp = request.getWhatsapp() != null && !request.getWhatsapp().isBlank();
 
-        if (!hasUsername && !hasEmail && !hasPassword) {
+        if (!hasNamaLengkap && !hasEmail && !hasPassword && !hasProfilePicture
+                && !hasInstitusi && !hasBio && !hasKeahlian && !hasLokasi && !hasWhatsapp) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
         }
 
-        if (hasUsername) {
-            String username = request.getUsername().trim();
-            if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
-            }
-            user.setUsername(username);
+        if (hasNamaLengkap) {
+            user.setNamaLengkap(request.getNamaLengkap().trim());
         }
 
         if (hasEmail) {
             String email = request.getEmail().trim();
+
             if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
             }
+
             user.setEmail(email);
         }
 
@@ -102,26 +122,114 @@ public class UserService {
             user.setPassword(request.getPassword());
         }
 
+        if (hasProfilePicture) {
+            user.setProfilePicture(request.getProfilePicture().trim());
+        }
+
+        if (hasInstitusi) {
+            user.setInstitusi(request.getInstitusi().trim());
+        }
+
+        if (hasBio) {
+            user.setBio(request.getBio().trim());
+        }
+
+        if (hasKeahlian) {
+            user.setKeahlian(request.getKeahlian().trim());
+        }
+
+        if (hasLokasi) {
+            user.setLokasi(request.getLokasi().trim());
+        }
+
+        if (hasWhatsapp) {
+            user.setWhatsapp(request.getWhatsapp().trim());
+        }
+
         User updatedUser = userRepository.save(user);
+
         return buildAuthResponse(updatedUser);
     }
 
     @Transactional
     public void deleteCurrentUser(String authorizationHeader) {
         Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
         userRepository.delete(user);
     }
 
     private AuthUserResponse buildAuthResponse(User user) {
-        long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
-        return AuthUserResponse.builder()
-                .userId(user.getIdPengguna())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
-                .expiredAt(expiredAt)
-                .build();
+    long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
+
+    return AuthUserResponse.builder()
+            .userId(user.getIdPengguna())
+            .namaLengkap(user.getNamaLengkap())
+            .email(user.getEmail())
+            .profilePicture(user.getProfilePicture())
+            .institusi(user.getInstitusi())
+            .bio(user.getBio())
+            .keahlian(user.getKeahlian())
+            .lokasi(user.getLokasi())
+            .whatsapp(user.getWhatsapp())
+            .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
+            .expiredAt(expiredAt)
+            .build();
     }
-}
+} 
+
+    // punya akbar 
+    // @Transactional
+    // public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request) {
+    //     Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
+    //     User user = userRepository.findById(userId)
+    //             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+    //     boolean hasUsername = request.getUsername() != null && !request.getUsername().isBlank();
+    //     boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
+    //     boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
+
+    //     if (!hasUsername && !hasEmail && !hasPassword) {
+    //         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
+    //     }
+
+    //     if (hasUsername) {
+    //         String username = request.getUsername().trim();
+    //         if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
+    //             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
+    //         }
+    //         user.setUsername(username);
+    //     }
+
+    //     if (hasEmail) {
+    //         String email = request.getEmail().trim();
+    //         if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
+    //             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+    //         }
+    //         user.setEmail(email);
+    //     }
+
+    //     if (hasPassword) {
+    //         user.setPassword(request.getPassword());
+    //     }
+
+    //     User updatedUser = userRepository.save(user);
+    //     return buildAuthResponse(updatedUser);
+    // }
+
+  
+
+
+//     private AuthUserResponse buildAuthResponse(User user) {
+//         long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
+//         return AuthUserResponse.builder()
+//                 .userId(user.getIdPengguna())
+//                 .username(user.getUsername())
+//                 .email(user.getEmail())
+//                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
+//                 .expiredAt(expiredAt)
+//                 .build();
+//     }
+// }

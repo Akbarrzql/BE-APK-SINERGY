@@ -1,7 +1,16 @@
-package com.impal.gabungyuk.auth.entity;
+package com.impal.gabungyuk.profile.entitiy;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -10,30 +19,25 @@ import lombok.*;
 @Entity
 @Table(name = "users")
 @Builder
-public class User {
 
+public class Profile {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_pengguna")
+
+    @Column(name= "id_pengguna", nullable = false)
     private Integer idPengguna;
-
-    @Column(name = "nama_lengkap", nullable = false)
-    private String namaLengkap;
-
-    // @Column(name = "username", nullable = false, unique = true)
-    // private String username;
-
-    @Column(name = "email", nullable = false, unique = true)
-    private String email;
-
-    @Column(name = "password", nullable = false)
-    private String password;
 
     @Column(name = "profile_picture", nullable = true)
     private String profilePicture;
 
+    @Column(name = "nama_lengkap", nullable = false)
+    private String namaLengkap;
+
+    @Column(name = "email", nullable = false)
+    private String email;
+
     @Column(name = "institusi", nullable = true)
-    private String institusi;
+    private String  institusi;
 
     @Column(name = "bio", nullable = true)
     private String bio;
@@ -46,4 +50,5 @@ public class User {
 
     @Column(name = "whatsapp", nullable = true)
     private String whatsapp;
+    
 }

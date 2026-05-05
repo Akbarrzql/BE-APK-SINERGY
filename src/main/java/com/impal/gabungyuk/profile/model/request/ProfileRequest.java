@@ -12,4 +12,7 @@ public class ProfileRequest {
     private String keahlian;
     private String lokasi;
     private String whatsapp;
+    private String instagram;
+    private String facebook;
+    private String linkedin;
 }

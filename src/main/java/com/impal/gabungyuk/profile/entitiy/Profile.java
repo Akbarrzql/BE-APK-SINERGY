@@ -50,5 +50,14 @@ public class Profile {
 
     @Column(name = "whatsapp", nullable = true)
     private String whatsapp;
+
+    @Column(name = "instagram", nullable = true)
+    private String instagram;
+
+    @Column(name = "facebook", nullable = true)
+    private String facebook;
+
+    @Column(name = "linkedin", nullable = true)
+    private String linkedin;
     
 }

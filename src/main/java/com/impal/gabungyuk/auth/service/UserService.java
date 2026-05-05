@@ -7,6 +7,7 @@ import com.impal.gabungyuk.auth.model.request.RegisterUserRequest;
 import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
 import com.impal.gabungyuk.auth.respository.UserRepository;
 import com.impal.gabungyuk.core.service.TokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 
 import java.nio.file.Files;
@@ -117,6 +118,7 @@ public class UserService {
 
     @Transactional
     public AuthUserResponse updateCurrentUser(
+            HttpServletRequest requestHttp,
             String authorizationHeader,
             UpdateUserRequest request,
             MultipartFile profilePicture
@@ -194,9 +196,8 @@ public class UserService {
                 }
 
                 String fileName = System.currentTimeMillis() + "_" + originalFilename;
-                String uploadDir = System.getProperty("user.home") + "/uploads/profile";
-
-                Path uploadPath = Paths.get(uploadDir);
+                String uploadDir = "uploads/profile";
+                Path uploadPath = Paths.get(uploadDir).toAbsolutePath();
 
                 if (!Files.exists(uploadPath)) {
                     Files.createDirectories(uploadPath);
@@ -210,7 +211,9 @@ public class UserService {
                         StandardCopyOption.REPLACE_EXISTING
                 );
 
-                user.setProfilePicture("/uploads/profile/" + fileName);
+                String baseUrl = requestHttp.getScheme() + "://" + requestHttp.getServerName() + ":" + requestHttp.getServerPort();
+
+                user.setProfilePicture(baseUrl + "/uploads/profile/" + fileName);
 
             } catch (ResponseStatusException e) {
                 throw e;

@@ -16,7 +16,7 @@ public class UpdateUserRequest {
     private String namaLengkap;
     private String institusi;
     private String bio;
-    private List<String> keahlian;
+    private List<String> keahlian; 
     private String lokasi;
     private String whatsapp;
     private String instagram;

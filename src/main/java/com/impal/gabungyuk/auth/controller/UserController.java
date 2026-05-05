@@ -6,6 +6,7 @@ import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
 import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.core.model.SuccessResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import tools.jackson.databind.ObjectMapper;
 
 import com.impal.gabungyuk.auth.service.UserService;
@@ -79,6 +80,7 @@ public class UserController {
             produces = MediaType.APPLICATION_JSON_VALUE
     )
     public SuccessResponse<AuthUserResponse> updateUser(
+            HttpServletRequest requestHttp,
             @RequestHeader("Authorization") String authorizationHeader,
             @RequestPart(value = "data", required = false) String dataJson,
             @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicture
@@ -98,6 +100,7 @@ public class UserController {
         }
 
         AuthUserResponse response = userService.updateCurrentUser(
+                requestHttp,
                 authorizationHeader,
                 request,
                 profilePicture

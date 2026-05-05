@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -11,7 +12,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class AuthUserResponse {
     private Integer userId;
-    //private String username;
     private String email;
     private String token;
     private Long expiredAt;
@@ -19,7 +19,10 @@ public class AuthUserResponse {
     private String profilePicture;
     private String institusi;
     private String bio;
-    private String keahlian;
+    private List<String> keahlian;
     private String lokasi;
     private String whatsapp;
+    private String instagram;
+    private String facebook;
+    private String linkedin;
 }

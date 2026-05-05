@@ -5,10 +5,16 @@ import com.impal.gabungyuk.auth.model.request.RegisterUserRequest;
 import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
 import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.core.model.SuccessResponse;
+
+import tools.jackson.databind.ObjectMapper;
+
 import com.impal.gabungyuk.auth.service.UserService;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Arrays;
 
@@ -63,57 +69,43 @@ public class UserController {
         return SuccessResponse.<AuthUserResponse>builder()
                 .status(200)
                 .message("Get user successful")
-                .data(response)
+                .data(response) 
                 .build();
     }
 
-    @PatchMapping(
-            value = "/api/v1/update/users/current",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE
-    )
-    public SuccessResponse<AuthUserResponse> updateUser(
-        @RequestHeader("Authorization") String authorizationHeader,
-        @RequestParam(value = "namaLengkap", required = false) String namaLengkap,
-        @RequestParam(value = "email", required = false) String email,
-        @RequestParam(value = "password", required = false) String password,
-        @RequestParam(value = "institusi", required = false) String institusi,
-        @RequestParam(value = "bio", required = false) String bio,
-        @RequestParam(value = "keahlian", required = false) String keahlian,
-        @RequestParam(value = "lokasi", required = false) String lokasi,
-        @RequestParam(value = "whatsapp", required = false) String whatsapp,
-        @RequestParam(value = "instagram", required = false) String instagram,
-        @RequestParam(value = "facebook", required = false) String facebook,
-        @RequestParam(value = "linkedin", required = false) String linkedin,
-
-        @RequestParam(value = "profilePicture", required = false) MultipartFile profilePicture
-    ){
-        UpdateUserRequest request = new UpdateUserRequest();
-        request.setNamaLengkap(namaLengkap);
-        request.setEmail(email);
-        request.setPassword(password);
-        request.setInstitusi(institusi);
-        request.setBio(bio);
-        request.setKeahlian(Arrays.asList(keahlian.split(",")));
-        request.setLokasi(lokasi);
-        request.setWhatsapp(whatsapp);
-        request.setInstagram(instagram);
-        request.setFacebook(facebook);
-        request.setLinkedin(linkedin);
-
-
-        AuthUserResponse response = userService.updateCurrentUser(
-            authorizationHeader,
-            request,
-            profilePicture
+  @PatchMapping(
+    value = "/api/v1/update/users/current",
+    consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+    produces = MediaType.APPLICATION_JSON_VALUE
+)
+public SuccessResponse<AuthUserResponse> updateUser(
+    @RequestHeader("Authorization") String authorizationHeader,
+    @RequestPart(value = "data", required = false) String dataJson,
+    @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicture
+) {
+    ObjectMapper mapper = new ObjectMapper();
+    UpdateUserRequest request = null;
+    
+    if (dataJson != null && !dataJson.isEmpty()) {
+        try {
+            request = mapper.readValue(dataJson, UpdateUserRequest.class);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid JSON: " + e.getMessage());
+        }
+    }
+    
+    AuthUserResponse response = userService.updateCurrentUser(
+        authorizationHeader,
+        request,
+        profilePicture
     );
-
-        return SuccessResponse.<AuthUserResponse>builder()
-                .status(200)
-                .message("Update user successful")
-                .data(response)
-                .build();
-    } 
+    
+    return SuccessResponse.<AuthUserResponse>builder()
+        .status(200)
+        .message("Update user successful")
+        .data(response)
+        .build();
+}
 
 
     @DeleteMapping(

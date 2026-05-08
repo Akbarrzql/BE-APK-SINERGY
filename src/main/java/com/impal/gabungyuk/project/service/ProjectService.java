@@ -1,5 +1,8 @@
 package com.impal.gabungyuk.project.service;
 
+import com.impal.gabungyuk.Activitylog.service.ActivityLogService;
+
+import com.impal.gabungyuk.project.model.response.UserOwnerResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,21 +22,26 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+
+
 @Service
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final TokenService tokenService;
+    private final ActivityLogService activityLogService;
 
     public ProjectService(
             ProjectRepository projectRepository,
             UserRepository userRepository,
-            TokenService tokenService
+            TokenService tokenService,
+            ActivityLogService activityLogService //penambahan log aktivitas
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
         this.tokenService = tokenService;
+        this.activityLogService = activityLogService; //penambahan log aktivitas
     }
 
     public ProjectResponse createProject(
@@ -72,7 +80,11 @@ public class ProjectService {
 
         Project savedProject = projectRepository.save(project);
 
+        //penambahan log aktivitas
+        activityLogService.log(user, savedProject, "Created project: " + savedProject.getTitle());
         return mapToResponse(savedProject);
+
+        
     }
 
     public ProjectResponse updateProject(
@@ -121,6 +133,9 @@ public class ProjectService {
         }
 
         Project updatedProject = projectRepository.save(project);
+
+        //penambahan log aktivitas
+        activityLogService.log(user, updatedProject, "Updated project: " + updatedProject.getTitle());
 
         return mapToResponse(updatedProject);
     }
@@ -172,7 +187,8 @@ public class ProjectService {
         if (!project.getUser().getIdPengguna().equals(user.getIdPengguna())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not allowed to delete this project");
         }
-
+         //penambahan log aktivitas
+        activityLogService.log(user, project, "Deleted project: " + project.getTitle());
         projectRepository.delete(project);
     }
 
@@ -244,6 +260,16 @@ public class ProjectService {
     }
 
     private ProjectResponse mapToResponse(Project project) {
+        UserOwnerResponse owner = null;
+        if (project.getUser() != null) {
+            owner = UserOwnerResponse.builder()
+                    .id(project.getUser().getIdPengguna())
+                    .fullName(project.getUser().getNamaLengkap())
+                    .email(project.getUser().getEmail())
+                    .profilePicture(project.getUser().getProfilePicture())
+                    .build();
+        }
+        
         return ProjectResponse.builder()
                 .id(project.getProjectId())
                 .title(project.getTitle())
@@ -252,6 +278,7 @@ public class ProjectService {
                 .status(project.getStatus())
                 .repositoryLink(project.getRepositoryLink())
                 .projectPicture(project.getFileUrl())
+                .owner(owner)
                 .build();
     }
 }

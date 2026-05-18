@@ -14,6 +14,7 @@ public class UpdateUserRequest {
     private String email;
     private String password;
     private String namaLengkap;
+    private String profilePicture;
     private String institusi;
     private String bio;
     private List<String> keahlian; 

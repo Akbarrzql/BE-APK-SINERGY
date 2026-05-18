@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -15,7 +16,10 @@ public class RegisterUserRequest {
     private String password;
     private String institusi;
     private String bio;
-    private String keahlian;
+    private List<String> keahlian;
     private String lokasi;
     private String whatsapp;
+    private String instagram;
+    private String facebook;
+    private String linkedin;
 }

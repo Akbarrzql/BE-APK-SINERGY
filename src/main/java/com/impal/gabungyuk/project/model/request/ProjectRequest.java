@@ -1,5 +1,6 @@
 package com.impal.gabungyuk.project.model.request;
 
+
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
@@ -18,4 +19,5 @@ public class ProjectRequest {
     private String status;
     private String repositoryLink;
     private String fileUrl;
+    private LocalDateTime deadline;
 }

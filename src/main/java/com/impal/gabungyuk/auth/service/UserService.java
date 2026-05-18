@@ -14,6 +14,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
 @Service
 public class UserService {
 
@@ -47,7 +52,7 @@ public class UserService {
                 .provider(PROVIDER_MANUAL)
                 .institusi(request.getInstitusi())
                 .bio(request.getBio())
-                .keahlian(request.getKeahlian())
+                .keahlian(serializeKeahlian(request.getKeahlian()))
                 .lokasi(request.getLokasi())
                 .whatsapp(request.getWhatsapp())
                 .build();
@@ -180,7 +185,7 @@ public class UserService {
                 .profilePicture(user.getProfilePicture())
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
-                .keahlian(user.getKeahlian())
+                .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .email(user.getEmail())
@@ -200,7 +205,8 @@ public class UserService {
         boolean hasProfilePicture = request.getProfilePicture() != null && !request.getProfilePicture().isBlank();
         boolean hasInstitusi = request.getInstitusi() != null && !request.getInstitusi().isBlank();
         boolean hasBio = request.getBio() != null && !request.getBio().isBlank();
-        boolean hasKeahlian = request.getKeahlian() != null && !request.getKeahlian().isBlank();
+        boolean hasKeahlian = request.getKeahlian() != null
+                && request.getKeahlian().stream().anyMatch(item -> item != null && !item.isBlank());
         boolean hasLokasi = request.getLokasi() != null && !request.getLokasi().isBlank();
         boolean hasWhatsapp = request.getWhatsapp() != null && !request.getWhatsapp().isBlank();
 
@@ -241,7 +247,7 @@ public class UserService {
         }
 
         if (hasKeahlian) {
-            user.setKeahlian(request.getKeahlian().trim());
+            user.setKeahlian(serializeKeahlian(request.getKeahlian()));
         }
 
         if (hasLokasi) {
@@ -276,7 +282,7 @@ public class UserService {
                 .profilePicture(user.getProfilePicture())
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
-                .keahlian(user.getKeahlian())
+                .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
@@ -292,12 +298,37 @@ public class UserService {
                 .profilePicture(user.getProfilePicture())
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
-                .keahlian(user.getKeahlian())
+                .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .token(token)
                 .expiredAt(expiredAt)
                 .build();
+    }
+
+    private List<String> parseKeahlian(String keahlian) {
+        if (keahlian == null || keahlian.isBlank()) {
+            return null;
+        }
+
+        return Arrays.stream(keahlian.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+    }
+
+    private String serializeKeahlian(List<String> keahlian) {
+        if (keahlian == null) {
+            return null;
+        }
+
+        String joined = keahlian.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining(","));
+
+        return joined.isBlank() ? null : joined;
     }
 
     private String normalizeEmail(String email) {

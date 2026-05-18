@@ -1,81 +1,61 @@
 package com.impal.gabungyuk.auth.service;
 
 import com.impal.gabungyuk.auth.entity.User;
-import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
+import com.impal.gabungyuk.auth.model.request.LoginGoogleRequest;
 import com.impal.gabungyuk.auth.model.request.LoginUserRequest;
 import com.impal.gabungyuk.auth.model.request.RegisterUserRequest;
 import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
+import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.auth.respository.UserRepository;
+import com.impal.gabungyuk.core.security.BCrypt;
 import com.impal.gabungyuk.core.service.TokenService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
-import java.util.List;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
 
+    private static final String PROVIDER_MANUAL = "manual";
+    private static final String PROVIDER_GOOGLE = "google";
+    private static final String PROVIDER_BOTH = "both";
+
     private final UserRepository userRepository;
     private final TokenService tokenService;
+    private final FirebaseAuthService firebaseAuthService;
 
-    public UserService(UserRepository userRepository, TokenService tokenService) {
+    public UserService(UserRepository userRepository, TokenService tokenService, FirebaseAuthService firebaseAuthService) {
         this.userRepository = userRepository;
         this.tokenService = tokenService;
-    }
-
-    // ===== HELPER METHODS =====
-
-    // Convert String (comma-separated) ke List<String>
-    private List<String> parseKeahlian(String keahlian) {
-        if (keahlian == null || keahlian.isEmpty()) {
-            return null;
-        }
-        return Arrays.asList(keahlian.split(","));
-    }
-
-    // Convert List<String> ke String (comma-separated)
-    private String joinKeahlian(List<String> keahlian) {
-        if (keahlian == null || keahlian.isEmpty()) {
-            return null;
-        }
-        return String.join(",", keahlian);
+        this.firebaseAuthService = firebaseAuthService;
     }
 
     @Transactional
     public AuthUserResponse register(RegisterUserRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = normalizeEmail(request.getEmail());
+        String rawPassword = requirePassword(request.getPassword());
+
+        if (userRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
         User user = User.builder()
-                .namaLengkap(request.getNamaLengkap())
-                .email(request.getEmail())
-                .password(request.getPassword())
-                // Tambahkan baris di bawah ini:
+                .namaLengkap(resolveDisplayName(request.getNamaLengkap(), email))
+                .email(email)
+                .password(hashPassword(rawPassword))
+                .provider(PROVIDER_MANUAL)
                 .institusi(request.getInstitusi())
                 .bio(request.getBio())
-                .keahlian(joinKeahlian(request.getKeahlian()))
+                .keahlian(serializeKeahlian(request.getKeahlian()))
                 .lokasi(request.getLokasi())
                 .whatsapp(request.getWhatsapp())
-                .instagram(request.getInstagram())
-                .facebook(request.getFacebook())
-                .linkedin(request.getLinkedin())
                 .build();
-                // .namaLengkap(request.getNamaLengkap())//ini guat tambah
-                // // .username(request.getUsername())
-                // .email(request.getEmail())
-                // .password(request.getPassword())
-                // .build();
 
         User savedUser = userRepository.save(user);
         return buildAuthResponse(savedUser);
@@ -83,14 +63,114 @@ public class UserService {
 
     @Transactional
     public AuthUserResponse login(LoginUserRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        String email = normalizeEmail(request.getEmail());
+        String rawPassword = requirePassword(request.getPassword());
+
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
 
-        if (!user.getPassword().equals(request.getPassword())) {
+        String storedPassword = user.getPassword();
+        if (storedPassword == null || storedPassword.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Password is not set for this account");
+        }
+
+        boolean passwordMatched;
+        boolean shouldSave = false;
+        if (isBcryptHash(storedPassword)) {
+            passwordMatched = BCrypt.checkpw(rawPassword, storedPassword);
+        } else {
+            passwordMatched = storedPassword.equals(rawPassword);
+            if (passwordMatched) {
+                user.setPassword(hashPassword(rawPassword));
+                shouldSave = true;
+            }
+        }
+
+        if (!passwordMatched) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
+        String mergedProvider = mergeProvider(resolveCurrentProvider(user), PROVIDER_MANUAL);
+        if (!mergedProvider.equals(user.getProvider())) {
+            user.setProvider(mergedProvider);
+            shouldSave = true;
+        }
+
+        if (shouldSave) {
+            user = userRepository.save(user);
+        }
+
         return buildAuthResponse(user);
+    }
+
+    @Transactional
+    public AuthUserResponse loginWithGoogle(LoginGoogleRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
+        }
+
+        FirebaseAuthService.FirebaseIdentity identity = firebaseAuthService.verifyIdToken(request.getIdToken());
+        User userByEmail = userRepository.findByEmail(identity.email()).orElse(null);
+        User userByFirebaseUid = userRepository.findByFirebaseUid(identity.uid()).orElse(null);
+
+        if (userByEmail != null && userByFirebaseUid != null
+                && !userByEmail.getIdPengguna().equals(userByFirebaseUid.getIdPengguna())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Google account is already linked to another user"
+            );
+        }
+
+        User user = userByEmail != null ? userByEmail : userByFirebaseUid;
+        if (user == null) {
+            User createdUser = userRepository.save(User.builder()
+                    .namaLengkap(resolveDisplayName(identity.name(), identity.email()))
+                    .email(identity.email())
+                    .password(hashPassword("firebase:" + identity.uid() + ":" + System.nanoTime()))
+                    .firebaseUid(identity.uid())
+                    .provider(PROVIDER_GOOGLE)
+                    .profilePicture(identity.picture())
+                    .build());
+            // Return Firebase ID token to client (client already has it, but return for compatibility)
+            long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60);
+            return buildAuthResponse(createdUser, request.getIdToken(), expiredAt);
+        }
+
+        if (!identity.email().equals(user.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email does not match linked Google account");
+        }
+
+        boolean shouldSave = false;
+        if (user.getFirebaseUid() == null || user.getFirebaseUid().isBlank()) {
+            user.setFirebaseUid(identity.uid());
+            shouldSave = true;
+        } else if (!user.getFirebaseUid().equals(identity.uid())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Google account mismatch for this email");
+        }
+
+        String mergedProvider = mergeProvider(resolveCurrentProvider(user), PROVIDER_GOOGLE);
+        if (!mergedProvider.equals(user.getProvider())) {
+            user.setProvider(mergedProvider);
+            shouldSave = true;
+        }
+
+        if (identity.name() != null && !identity.name().isBlank() && !identity.name().trim().equals(user.getNamaLengkap())) {
+            user.setNamaLengkap(identity.name().trim());
+            shouldSave = true;
+        }
+
+        if (identity.picture() != null && !identity.picture().isBlank()
+                && !identity.picture().trim().equals(user.getProfilePicture())) {
+            user.setProfilePicture(identity.picture().trim());
+            shouldSave = true;
+        }
+
+        if (shouldSave) {
+            user = userRepository.save(user);
+        }
+
+        long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60);
+        return buildAuthResponse(user, request.getIdToken(), expiredAt);
     }
 
     @Transactional
@@ -102,59 +182,37 @@ public class UserService {
         return AuthUserResponse.builder()
                 .userId(user.getIdPengguna())
                 .namaLengkap(user.getNamaLengkap())
-                .profilePicture(user.getProfilePicture())//ini guat tambah
-                .institusi(user.getInstitusi())//ini guat tambah
-                .bio(user.getBio())//ini guat tambah
-                .keahlian(parseKeahlian(user.getKeahlian()))//ini guat tambah
-                .lokasi(user.getLokasi())//ini guat tambah
-                .whatsapp(user.getWhatsapp())//ini guat tambah
-                .instagram(user.getInstagram())//ini guat tambah
-                .facebook(user.getFacebook())//ini guat tambah
-                .linkedin(user.getLinkedin())//ini guat tambah
-                // .username(user.getUsername()) punya lu bar
+                .profilePicture(user.getProfilePicture())
+                .institusi(user.getInstitusi())
+                .bio(user.getBio())
+                .keahlian(parseKeahlian(user.getKeahlian()))
+                .lokasi(user.getLokasi())
+                .whatsapp(user.getWhatsapp())
                 .email(user.getEmail())
                 .build();
     }
 
     @Transactional
-    public AuthUserResponse updateCurrentUser(
-            HttpServletRequest requestHttp,
-            String authorizationHeader,
-            UpdateUserRequest request,
-            MultipartFile profilePicture
-    ) {
+    public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request) {
         Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "User not found"
-                ));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        if (request == null) {
-            request = new UpdateUserRequest();
-        }
-
-        boolean hasNamaLengkap = request.getNamaLengkap() != null;
-        boolean hasEmail = request.getEmail() != null;
-        boolean hasPassword = request.getPassword() != null;
-        boolean hasProfilePicture = profilePicture != null && !profilePicture.isEmpty();
-        boolean hasInstitusi = request.getInstitusi() != null;
-        boolean hasBio = request.getBio() != null;
-        boolean hasKeahlian = request.getKeahlian() != null;
-        boolean hasLokasi = request.getLokasi() != null;
-        boolean hasWhatsapp = request.getWhatsapp() != null;
-        boolean hasInstagram = request.getInstagram() != null;
-        boolean hasFacebook = request.getFacebook() != null;
-        boolean hasLinkedin = request.getLinkedin() != null;
+        boolean hasNamaLengkap = request.getNamaLengkap() != null && !request.getNamaLengkap().isBlank();
+        boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
+        boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
+        boolean hasProfilePicture = request.getProfilePicture() != null && !request.getProfilePicture().isBlank();
+        boolean hasInstitusi = request.getInstitusi() != null && !request.getInstitusi().isBlank();
+        boolean hasBio = request.getBio() != null && !request.getBio().isBlank();
+        boolean hasKeahlian = request.getKeahlian() != null
+                && request.getKeahlian().stream().anyMatch(item -> item != null && !item.isBlank());
+        boolean hasLokasi = request.getLokasi() != null && !request.getLokasi().isBlank();
+        boolean hasWhatsapp = request.getWhatsapp() != null && !request.getWhatsapp().isBlank();
 
         if (!hasNamaLengkap && !hasEmail && !hasPassword && !hasProfilePicture
-                && !hasInstitusi && !hasBio && !hasKeahlian && !hasLokasi
-                && !hasWhatsapp && !hasInstagram && !hasFacebook && !hasLinkedin) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "At least one field must be provided"
-            );
+                && !hasInstitusi && !hasBio && !hasKeahlian && !hasLokasi && !hasWhatsapp) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
         }
 
         if (hasNamaLengkap) {
@@ -162,71 +220,23 @@ public class UserService {
         }
 
         if (hasEmail) {
-            String email = request.getEmail().trim();
+            String email = normalizeEmail(request.getEmail());
 
-            if (!email.isBlank()) {
-                if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "Email already exists"
-                    );
-                }
-
-                user.setEmail(email);
+            if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
             }
+
+            user.setEmail(email);
         }
 
         if (hasPassword) {
-            String password = request.getPassword();
-
-            if (!password.isBlank()) {
-                user.setPassword(password);
-            }
+            user.setPassword(hashPassword(request.getPassword().trim()));
+            user.setProvider(mergeProvider(resolveCurrentProvider(user), PROVIDER_MANUAL));
         }
 
         if (hasProfilePicture) {
-            try {
-                String originalFilename = profilePicture.getOriginalFilename();
-
-                if (originalFilename == null || originalFilename.isBlank()) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Invalid profile picture filename"
-                    );
-                }
-
-                String fileName = System.currentTimeMillis() + "_" + originalFilename;
-                String uploadDir = "uploads/profile";
-                Path uploadPath = Paths.get(uploadDir).toAbsolutePath();
-
-                if (!Files.exists(uploadPath)) {
-                    Files.createDirectories(uploadPath);
-                }
-
-                Path filePath = uploadPath.resolve(fileName);
-
-                Files.copy(
-                        profilePicture.getInputStream(),
-                        filePath,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-
-                String baseUrl = requestHttp.getScheme() + "://" + requestHttp.getServerName() + ":" + requestHttp.getServerPort();
-
-                user.setProfilePicture(baseUrl + "/uploads/profile/" + fileName);
-
-            } catch (ResponseStatusException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Failed to upload profile picture: " + e.getMessage()
-                );
-            }
+            user.setProfilePicture(request.getProfilePicture().trim());
         }
-
-        // Jangan pakai else user.setProfilePicture(null)
-        // Karena kalau tidak upload foto, foto lama tetap dipertahankan.
 
         if (hasInstitusi) {
             user.setInstitusi(request.getInstitusi().trim());
@@ -237,7 +247,7 @@ public class UserService {
         }
 
         if (hasKeahlian) {
-            user.setKeahlian(joinKeahlian(request.getKeahlian()));
+            user.setKeahlian(serializeKeahlian(request.getKeahlian()));
         }
 
         if (hasLokasi) {
@@ -248,20 +258,7 @@ public class UserService {
             user.setWhatsapp(request.getWhatsapp().trim());
         }
 
-        if (hasInstagram) {
-            user.setInstagram(request.getInstagram().trim());
-        }
-
-        if (hasFacebook) {
-            user.setFacebook(request.getFacebook().trim());
-        }
-
-        if (hasLinkedin) {
-            user.setLinkedin(request.getLinkedin().trim());
-        }
-
         User updatedUser = userRepository.save(user);
-
         return buildAuthResponse(updatedUser);
     }
 
@@ -276,77 +273,136 @@ public class UserService {
     }
 
     private AuthUserResponse buildAuthResponse(User user) {
-    long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
+        long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
 
-    return AuthUserResponse.builder()
-            .userId(user.getIdPengguna())
-            .namaLengkap(user.getNamaLengkap())
-            .email(user.getEmail())
-            .profilePicture(user.getProfilePicture())
-            .institusi(user.getInstitusi())
-            .bio(user.getBio())
-            .keahlian(parseKeahlian(user.getKeahlian()))
-            .lokasi(user.getLokasi())
-            .whatsapp(user.getWhatsapp())
-            .instagram(user.getInstagram())
-            .facebook(user.getFacebook())
-            .linkedin(user.getLinkedin())    
-            .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
-            .expiredAt(expiredAt)
-            .build();
+        return AuthUserResponse.builder()
+                .userId(user.getIdPengguna())
+                .namaLengkap(user.getNamaLengkap())
+                .email(user.getEmail())
+                .profilePicture(user.getProfilePicture())
+                .institusi(user.getInstitusi())
+                .bio(user.getBio())
+                .keahlian(parseKeahlian(user.getKeahlian()))
+                .lokasi(user.getLokasi())
+                .whatsapp(user.getWhatsapp())
+                .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
+                .expiredAt(expiredAt)
+                .build();
     }
-} 
 
-    // punya akbar 
-    // @Transactional
-    // public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request) {
-    //     Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
-    //     User user = userRepository.findById(userId)
-    //             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    private AuthUserResponse buildAuthResponse(User user, String token, long expiredAt) {
+        return AuthUserResponse.builder()
+                .userId(user.getIdPengguna())
+                .namaLengkap(user.getNamaLengkap())
+                .email(user.getEmail())
+                .profilePicture(user.getProfilePicture())
+                .institusi(user.getInstitusi())
+                .bio(user.getBio())
+                .keahlian(parseKeahlian(user.getKeahlian()))
+                .lokasi(user.getLokasi())
+                .whatsapp(user.getWhatsapp())
+                .token(token)
+                .expiredAt(expiredAt)
+                .build();
+    }
 
-    //     boolean hasUsername = request.getUsername() != null && !request.getUsername().isBlank();
-    //     boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
-    //     boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
+    private List<String> parseKeahlian(String keahlian) {
+        if (keahlian == null || keahlian.isBlank()) {
+            return null;
+        }
 
-    //     if (!hasUsername && !hasEmail && !hasPassword) {
-    //         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
-    //     }
+        return Arrays.stream(keahlian.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+    }
 
-    //     if (hasUsername) {
-    //         String username = request.getUsername().trim();
-    //         if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
-    //             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
-    //         }
-    //         user.setUsername(username);
-    //     }
+    private String serializeKeahlian(List<String> keahlian) {
+        if (keahlian == null) {
+            return null;
+        }
 
-    //     if (hasEmail) {
-    //         String email = request.getEmail().trim();
-    //         if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
-    //             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-    //         }
-    //         user.setEmail(email);
-    //     }
+        String joined = keahlian.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining(","));
 
-    //     if (hasPassword) {
-    //         user.setPassword(request.getPassword());
-    //     }
+        return joined.isBlank() ? null : joined;
+    }
 
-    //     User updatedUser = userRepository.save(user);
-    //     return buildAuthResponse(updatedUser);
-    // }
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+        return email.trim().toLowerCase();
+    }
 
-  
+    private String requirePassword(String password) {
+        if (password == null || password.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password is required");
+        }
+        return password.trim();
+    }
 
+    private String resolveDisplayName(String requestedName, String email) {
+        if (requestedName != null && !requestedName.isBlank()) {
+            return requestedName.trim();
+        }
 
-//     private AuthUserResponse buildAuthResponse(User user) {
-//         long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
-//         return AuthUserResponse.builder()
-//                 .userId(user.getIdPengguna())
-//                 .username(user.getUsername())
-//                 .email(user.getEmail())
-//                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
-//                 .expiredAt(expiredAt)
-//                 .build();
-//     }
-// }
+        int separator = email.indexOf('@');
+        if (separator > 0) {
+            return email.substring(0, separator);
+        }
+
+        return email;
+    }
+
+    private String hashPassword(String password) {
+        return BCrypt.hashpw(password, BCrypt.gensalt());
+    }
+
+    private boolean isBcryptHash(String storedPassword) {
+        return storedPassword.startsWith("$2a$")
+                || storedPassword.startsWith("$2b$")
+                || storedPassword.startsWith("$2y$");
+    }
+
+    private String mergeProvider(String currentProvider, String newProvider) {
+        if (currentProvider == null || currentProvider.isBlank()) {
+            return newProvider;
+        }
+
+        if (PROVIDER_BOTH.equals(currentProvider) || currentProvider.equals(newProvider)) {
+            return currentProvider;
+        }
+
+        if ((PROVIDER_MANUAL.equals(currentProvider) && PROVIDER_GOOGLE.equals(newProvider))
+                || (PROVIDER_GOOGLE.equals(currentProvider) && PROVIDER_MANUAL.equals(newProvider))) {
+            return PROVIDER_BOTH;
+        }
+
+        return newProvider;
+    }
+
+    private String resolveCurrentProvider(User user) {
+        if (user.getProvider() != null && !user.getProvider().isBlank()) {
+            return user.getProvider();
+        }
+
+        boolean hasManual = user.getPassword() != null && !user.getPassword().isBlank();
+        boolean hasGoogle = user.getFirebaseUid() != null && !user.getFirebaseUid().isBlank();
+
+        if (hasManual && hasGoogle) {
+            return PROVIDER_BOTH;
+        }
+        if (hasManual) {
+            return PROVIDER_MANUAL;
+        }
+        if (hasGoogle) {
+            return PROVIDER_GOOGLE;
+        }
+
+        return null;
+    }
+}

@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.impal.gabungyuk.Activitylog.service.ActivityLogService;
 import com.impal.gabungyuk.auth.entity.User;
 import com.impal.gabungyuk.auth.respository.UserRepository;
 import com.impal.gabungyuk.collaboration.entity.Collaboration;
@@ -17,12 +18,12 @@ import com.impal.gabungyuk.collaboration.model.response.PendingCollaborationResp
 import com.impal.gabungyuk.collaboration.model.response.PendingCollaborationUserResponse;
 import com.impal.gabungyuk.collaboration.repository.CollaborationRepository;
 import com.impal.gabungyuk.core.service.TokenService;
+import com.impal.gabungyuk.notification.service.NotificationService;
 import com.impal.gabungyuk.profile.entitiy.Profile;
 import com.impal.gabungyuk.profile.repository.ProfileRepository;
 import com.impal.gabungyuk.project.entity.Project;
 import com.impal.gabungyuk.project.model.response.ProjectResponse;
 import com.impal.gabungyuk.project.respository.ProjectRepository;
-import com.impal.gabungyuk.Activitylog.service.ActivityLogService;
 
 @Service
 public class CollaborationService {
@@ -34,13 +35,17 @@ public class CollaborationService {
     private final ProfileRepository profileRepository;
     private final ActivityLogService activityLogService;
 
+    // untuk notification
+    private final NotificationService notificationService;
+
     public CollaborationService(
             CollaborationRepository collaborationRepository,
             TokenService tokenService,
             UserRepository userRepository,
             ProjectRepository projectRepository,
             ProfileRepository profileRepository,
-            ActivityLogService activityLogService //penambahan log aktivitas
+            ActivityLogService activityLogService,
+            NotificationService notificationService
     ) {
         this.collaborationRepository = collaborationRepository;
         this.tokenService = tokenService;
@@ -48,6 +53,7 @@ public class CollaborationService {
         this.projectRepository = projectRepository;
         this.profileRepository = profileRepository;
         this.activityLogService = activityLogService;
+        this.notificationService = notificationService;
     }
 
     public CollaborationResponse requestCollaboration(Integer projectId, String authorizationHeader) {
@@ -98,8 +104,20 @@ public class CollaborationService {
                 .build();
 
         Collaboration saved = collaborationRepository.save(collaboration);
-        //penambahan log aktivitas      
-        activityLogService.log(user, project, "Requested collaboration: " + collaboration.getRole());
+
+        // penambahan log aktivitas
+        activityLogService.log(user, project, "Requested collaboration: " + saved.getRole());
+
+        // untuk notification
+        notificationService.notifyCollaborationRequest(
+                project.getUser().getIdPengguna(),
+                userId,
+                project.getProjectId(),
+                saved.getCollaborationId(),
+                profile.getNamaLengkap(),
+                project.getTitle()
+        );
+
         return mapToResponse(saved, project);
     }
 
@@ -124,7 +142,7 @@ public class CollaborationService {
     ) {
         Integer ownerId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
 
-        userRepository.findById(ownerId)
+        User owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         if (request.getProjectId() == null) {
@@ -172,12 +190,32 @@ public class CollaborationService {
         }
 
         Collaboration updated = collaborationRepository.save(collaboration);
-        //penambahan log aktivitas      
+
+        // penambahan log aktivitas
         activityLogService.log(
-                userRepository.findById(ownerId).orElseThrow(),
+                owner,
                 project,
                 request.getAction() + " collaboration on project: " + project.getTitle()
         );
+
+        // untuk notification
+        if (updated.getStatus().equalsIgnoreCase("ACCEPTED")) {
+            notificationService.notifyCollaborationAccepted(
+                    updated.getIdPengguna(),
+                    ownerId,
+                    project.getProjectId(),
+                    updated.getCollaborationId(),
+                    project.getTitle()
+            );
+        } else if (updated.getStatus().equalsIgnoreCase("DECLINED")) {
+            notificationService.notifyCollaborationDeclined(
+                    updated.getIdPengguna(),
+                    ownerId,
+                    project.getProjectId(),
+                    updated.getCollaborationId(),
+                    project.getTitle()
+            );
+        }
 
         Profile profile = profileRepository.findByIdPengguna(updated.getIdPengguna())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
@@ -287,6 +325,7 @@ public class CollaborationService {
                         .status(project.getStatus())
                         .repositoryLink(project.getRepositoryLink())
                         .projectPicture(project.getFileUrl())
+                        .deadline(project.getDeadline())
                         .build())
                 .toList();
 
@@ -330,6 +369,7 @@ public class CollaborationService {
                 .status(project.getStatus())
                 .repositoryLink(project.getRepositoryLink())
                 .projectPicture(project.getFileUrl())
+                .deadline(project.getDeadline())
                 .build();
     }
 
@@ -351,6 +391,7 @@ public class CollaborationService {
                         .status(project.getStatus())
                         .repositoryLink(project.getRepositoryLink())
                         .projectPicture(project.getFileUrl())
+                        .deadline(project.getDeadline())
                         .build())
                 .owner(CollaborationResponse.OwnerDetail.builder()
                         .idPengguna(project.getUser().getIdPengguna())

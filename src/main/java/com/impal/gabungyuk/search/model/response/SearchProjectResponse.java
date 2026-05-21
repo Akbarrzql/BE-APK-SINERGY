@@ -1,4 +1,4 @@
-package com.impal.gabungyuk.project.model.request;
+package com.impal.gabungyuk.search.model.response;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,12 +12,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ProjectRequest {
+public class SearchProjectResponse {
+
+    private Integer id;
     private String title;
     private String description;
     private List<String> category;
     private String status;
     private String repositoryLink;
-    private String fileUrl;
+    private String projectPicture;
     private LocalDateTime deadline;
 }

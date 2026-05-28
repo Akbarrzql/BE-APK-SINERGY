@@ -48,11 +48,11 @@ public class PortfolioService {
     }
 
     // EDIT
-    public PortfolioResponse updatePortfolio(String authorizationHeader, PortfolioRequest request) {
+    public PortfolioResponse updatePortfolio(String authorizationHeader, PortfolioRequest request, Integer portfolioId) {
 
         Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
 
-        Portfolio portfolio = portfolioRepository.findById(request.getPortfolioId())
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Portfolio not found"

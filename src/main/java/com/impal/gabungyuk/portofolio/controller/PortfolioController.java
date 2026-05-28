@@ -33,7 +33,7 @@ public class PortfolioController {
         }
 
     @PostMapping(
-            value = "/api/v1/portfolio",
+            value = "/api/v1/create/portfolio",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
@@ -48,23 +48,25 @@ public class PortfolioController {
         }
 
     @PutMapping(
-        value = "/api/v1/portfolio",
+        value = "/api/v1/edit/portfolio/{portoflioId}",
         consumes = MediaType.APPLICATION_JSON_VALUE,
         produces = MediaType.APPLICATION_JSON_VALUE
         )
         public SuccessResponse<PortfolioResponse> updatePortfolio(
                 @RequestHeader("Authorization") String authorizationHeader,
-                @RequestBody PortfolioRequest request) {
+                @RequestBody PortfolioRequest request,
+                @PathVariable Integer portoflioId
+                ) {
 
         return SuccessResponse.<PortfolioResponse>builder()
                 .status(200)
                 .message("Portfolio updated successfully")
-                .data(portfolioService.updatePortfolio(authorizationHeader, request))
+                .data(portfolioService.updatePortfolio(authorizationHeader, request, portoflioId))
                 .build();
         }
 
     @DeleteMapping(
-        value = "/api/v1/portfolio/{id}",
+        value = "/api/v1/delete/portfolio/{id}",
         produces = MediaType.APPLICATION_JSON_VALUE
         )
         public SuccessResponse<Void> deletePortfolio(

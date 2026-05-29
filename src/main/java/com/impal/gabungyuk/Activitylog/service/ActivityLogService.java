@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
-
+import java.util.Map;
 
 @Service
 public class ActivityLogService {
@@ -37,6 +37,23 @@ public class ActivityLogService {
             .timestamp(LocalDateTime.now())
             .build();
     activityLogRepository.save(activityLog);
+}
+
+
+public Map<String, Long> getActivityRecap(String authorizationHeader) {
+    Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
+
+    userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+    List<ActivityLog> logs = activityLogRepository.findByUser_IdPenggunaOrderByTimestampDesc(userId);
+
+    // Group by tanggal (yyyy-MM-dd) → hitung jumlah aktivitas per hari
+    return logs.stream()
+            .collect(Collectors.groupingBy(
+                    log -> log.getTimestamp().toLocalDate().toString(),
+                    Collectors.counting()
+            ));
 }
 
     public List<ActivityLogResponse> getMyActivityLogs(String authorizationHeader) {

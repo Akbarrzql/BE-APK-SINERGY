@@ -12,11 +12,11 @@ import com.impal.gabungyuk.core.service.TokenService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +34,9 @@ public class UserService {
     private static final String PROVIDER_MANUAL = "manual";
     private static final String PROVIDER_GOOGLE = "google";
     private static final String PROVIDER_BOTH = "both";
+
+    @Value("${app.base-url:}")
+    private String appBaseUrl;
 
     private final UserRepository userRepository;
     private final TokenService tokenService;
@@ -124,10 +127,7 @@ public class UserService {
 
         if (userByEmail != null && userByFirebaseUid != null
                 && !userByEmail.getIdPengguna().equals(userByFirebaseUid.getIdPengguna())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Google account is already linked to another user"
-            );
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Google account is already linked to another user");
         }
 
         User user = userByEmail != null ? userByEmail : userByFirebaseUid;
@@ -140,7 +140,6 @@ public class UserService {
                     .provider(PROVIDER_GOOGLE)
                     .profilePicture(identity.picture())
                     .build());
-            // Return Firebase ID token to client (client already has it, but return for compatibility)
             long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60);
             return buildAuthResponse(createdUser, request.getIdToken(), expiredAt);
         }
@@ -163,7 +162,8 @@ public class UserService {
             shouldSave = true;
         }
 
-        if (identity.name() != null && !identity.name().isBlank() && !identity.name().trim().equals(user.getNamaLengkap())) {
+        if (identity.name() != null && !identity.name().isBlank()
+                && !identity.name().trim().equals(user.getNamaLengkap())) {
             user.setNamaLengkap(identity.name().trim());
             shouldSave = true;
         }
@@ -184,28 +184,33 @@ public class UserService {
 
     @Transactional
     public AuthUserResponse getUserById(Integer id, String authorizationHeader) {
-
         tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
 
         User user = userRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         return AuthUserResponse.builder()
                 .userId(user.getIdPengguna())
                 .namaLengkap(user.getNamaLengkap())
-                .profilePicture(user.getProfilePicture())
+                .profilePicture(normalizeProfilePictureUrl(user.getProfilePicture()))
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .email(user.getEmail())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .build();
     }
 
     @Transactional
-    public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request, MultipartFile profilePicture) {
+    public AuthUserResponse updateCurrentUser(
+            String authorizationHeader,
+            UpdateUserRequest request,
+            MultipartFile profilePicture
+    ) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
         }
@@ -215,21 +220,20 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        // Pengecekan hanya berdasarkan nullability agar "" (string kosong) tetap diproses
-        boolean hasNamaLengkap = request.getNamaLengkap() != null;
-        boolean hasEmail = request.getEmail() != null;
-        boolean hasPassword = request.getPassword() != null;
-        boolean hasProfilePicture = profilePicture != null && !profilePicture.isEmpty();
+        boolean hasNamaLengkap      = request.getNamaLengkap() != null;
+        boolean hasEmail            = request.getEmail() != null;
+        boolean hasPassword         = request.getPassword() != null;
+        boolean hasProfilePicture   = profilePicture != null && !profilePicture.isEmpty();
         boolean hasProfilePictureUrl = request.getProfilePicture() != null;
-        boolean hasInstitusi = request.getInstitusi() != null;
-        boolean hasBio = request.getBio() != null;
-        boolean hasKeahlian = request.getKeahlian() != null;
-        boolean hasLokasi = request.getLokasi() != null;
-        boolean hasWhatsapp = request.getWhatsapp() != null;
-        boolean hasInstagram = request.getInstagram() != null;
-        boolean hasFacebook = request.getFacebook() != null;
-        boolean hasLinkedin = request.getLinkedin() != null;
-        // Validasi minimal ada satu field yang dikirim (bisa berupa string kosong)
+        boolean hasInstitusi        = request.getInstitusi() != null;
+        boolean hasBio              = request.getBio() != null;
+        boolean hasKeahlian         = request.getKeahlian() != null;
+        boolean hasLokasi           = request.getLokasi() != null;
+        boolean hasWhatsapp         = request.getWhatsapp() != null;
+        boolean hasInstagram        = request.getInstagram() != null;
+        boolean hasFacebook         = request.getFacebook() != null;
+        boolean hasLinkedin         = request.getLinkedin() != null;
+
         if (!hasNamaLengkap && !hasEmail && !hasPassword && !hasProfilePicture
                 && !hasProfilePictureUrl && !hasInstitusi && !hasBio && !hasKeahlian
                 && !hasLokasi && !hasWhatsapp && !hasInstagram && !hasFacebook && !hasLinkedin) {
@@ -242,12 +246,9 @@ public class UserService {
 
         if (hasEmail) {
             String email = normalizeEmail(request.getEmail());
-
-            // Cek duplikat email hanya jika email-nya berubah
             if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
             }
-
             user.setEmail(email);
         }
 
@@ -257,66 +258,24 @@ public class UserService {
         }
 
         if (hasProfilePicture) {
-            try {
-                String fileName = System.currentTimeMillis() + "_" + profilePicture.getOriginalFilename();
-                String uploadDir = System.getProperty("user.home") + "/uploads/profile";
-                Path uploadPath = Paths.get(uploadDir);
-
-                if (!Files.exists(uploadPath)) {
-                    Files.createDirectories(uploadPath);
-                }
-
-                Path filePath = uploadPath.resolve(fileName);
-                Files.copy(profilePicture.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-                user.setProfilePicture("/uploads/profile/" + fileName);
-            } catch (Exception e) {
-                log.warn("Failed to upload profile picture: {}", e.getMessage(), e);
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Failed to upload profile picture: " + e.getMessage());
-            }
+            String relativePath = uploadProfilePicture(profilePicture);
+            user.setProfilePicture(relativePath);
         } else if (hasProfilePictureUrl) {
             user.setProfilePicture(request.getProfilePicture().trim());
         }
 
-        // Bagian di bawah ini sekarang bisa menerima string kosong untuk mengosongkan data di DB
-        if (hasInstitusi) {
-            user.setInstitusi(request.getInstitusi().trim());
-        }
-
-        if (hasBio) {
-            user.setBio(request.getBio().trim());
-        }
-
-        if (hasKeahlian) {
-            user.setKeahlian(serializeKeahlian(request.getKeahlian()));
-        }
-
-        if (hasLokasi) {
-            user.setLokasi(request.getLokasi().trim());
-        }
-
-        if (hasWhatsapp) {
-            user.setWhatsapp(request.getWhatsapp().trim());
-        }
-
-        if (hasInstagram) {
-            user.setInstagram(request.getInstagram().trim());
-        }
-
-        if (hasFacebook) {
-            user.setFacebook(request.getFacebook().trim());
-        }
-
-        if (hasLinkedin) {
-            user.setLinkedin(request.getLinkedin().trim());
-        }
+        if (hasInstitusi)  { user.setInstitusi(request.getInstitusi().trim()); }
+        if (hasBio)        { user.setBio(request.getBio().trim()); }
+        if (hasKeahlian)   { user.setKeahlian(serializeKeahlian(request.getKeahlian())); }
+        if (hasLokasi)     { user.setLokasi(request.getLokasi().trim()); }
+        if (hasWhatsapp)   { user.setWhatsapp(request.getWhatsapp().trim()); }
+        if (hasInstagram)  { user.setInstagram(request.getInstagram().trim()); }
+        if (hasFacebook)   { user.setFacebook(request.getFacebook().trim()); }
+        if (hasLinkedin)   { user.setLinkedin(request.getLinkedin().trim()); }
 
         User updatedUser = userRepository.save(user);
-
         return buildAuthResponse(updatedUser);
     }
-
 
     @Transactional
     public void deleteCurrentUser(String authorizationHeader) {
@@ -327,6 +286,10 @@ public class UserService {
 
         userRepository.delete(user);
     }
+
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
 
     private AuthUserResponse buildAuthResponse(User user) {
         long expiredAt = System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 7);
@@ -341,6 +304,9 @@ public class UserService {
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
                 .expiredAt(expiredAt)
                 .build();
@@ -357,34 +323,12 @@ public class UserService {
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .token(token)
                 .expiredAt(expiredAt)
                 .build();
-    }
-
-    private List<String> parseKeahlian(String keahlian) {
-        if (keahlian == null || keahlian.isBlank()) {
-            return null;
-        }
-
-        return Arrays.stream(keahlian.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .toList();
-    }
-
-    private String serializeKeahlian(List<String> keahlian) {
-        if (keahlian == null) {
-            return null;
-        }
-
-        String joined = keahlian.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .collect(Collectors.joining(","));
-
-        return joined.isBlank() ? null : joined;
     }
 
     private String normalizeProfilePictureUrl(String profilePicture) {
@@ -398,16 +342,68 @@ public class UserService {
             return trimmed;
         }
 
+        String base = (appBaseUrl != null && !appBaseUrl.isBlank())
+                ? appBaseUrl.stripTrailing().replaceAll("/+$", "")
+                : "";
+
         if (trimmed.startsWith("/")) {
-            return ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path(trimmed)
-                    .toUriString();
+            return base + trimmed;
         }
 
-        return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/")
-                .path(trimmed)
-                .toUriString();
+        return base + "/" + trimmed;
+    }
+
+    private String uploadProfilePicture(MultipartFile profilePicture) {
+        try {
+            String originalFilename = profilePicture.getOriginalFilename();
+            if (originalFilename == null || originalFilename.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profile picture filename is invalid");
+            }
+
+            String safeFileName = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String fileName = System.currentTimeMillis() + "_" + safeFileName;
+
+            String uploadDir = System.getProperty("user.home") + "/uploads/profile";
+            Path uploadPath = Paths.get(uploadDir);
+
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            Path filePath = uploadPath.resolve(fileName);
+            Files.copy(profilePicture.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            return "/uploads/profile/" + fileName;
+
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to upload profile picture: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to upload profile picture: " + e.getMessage());
+        }
+    }
+
+    private List<String> parseKeahlian(String keahlian) {
+        if (keahlian == null || keahlian.isBlank()) {
+            return null;
+        }
+        return Arrays.stream(keahlian.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+    }
+
+    private String serializeKeahlian(List<String> keahlian) {
+        if (keahlian == null) {
+            return null;
+        }
+        String joined = keahlian.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining(","));
+        return joined.isBlank() ? null : joined;
     }
 
     private String normalizeEmail(String email) {
@@ -428,12 +424,10 @@ public class UserService {
         if (requestedName != null && !requestedName.isBlank()) {
             return requestedName.trim();
         }
-
         int separator = email.indexOf('@');
         if (separator > 0) {
             return email.substring(0, separator);
         }
-
         return email;
     }
 
@@ -451,16 +445,13 @@ public class UserService {
         if (currentProvider == null || currentProvider.isBlank()) {
             return newProvider;
         }
-
         if (PROVIDER_BOTH.equals(currentProvider) || currentProvider.equals(newProvider)) {
             return currentProvider;
         }
-
         if ((PROVIDER_MANUAL.equals(currentProvider) && PROVIDER_GOOGLE.equals(newProvider))
                 || (PROVIDER_GOOGLE.equals(currentProvider) && PROVIDER_MANUAL.equals(newProvider))) {
             return PROVIDER_BOTH;
         }
-
         return newProvider;
     }
 
@@ -468,20 +459,11 @@ public class UserService {
         if (user.getProvider() != null && !user.getProvider().isBlank()) {
             return user.getProvider();
         }
-
         boolean hasManual = user.getPassword() != null && !user.getPassword().isBlank();
         boolean hasGoogle = user.getFirebaseUid() != null && !user.getFirebaseUid().isBlank();
-
-        if (hasManual && hasGoogle) {
-            return PROVIDER_BOTH;
-        }
-        if (hasManual) {
-            return PROVIDER_MANUAL;
-        }
-        if (hasGoogle) {
-            return PROVIDER_GOOGLE;
-        }
-
+        if (hasManual && hasGoogle) return PROVIDER_BOTH;
+        if (hasManual) return PROVIDER_MANUAL;
+        if (hasGoogle) return PROVIDER_GOOGLE;
         return null;
     }
 }

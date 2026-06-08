@@ -141,14 +141,46 @@
 ## Update User
 - Endpoint: `PATCH /api/v1/update/users/current` atau `PUT /api/v1/update/users/current`
 - Headers: Authorization: Bearer {token}
-- Request Body:
+- Content-Type:
+  - `application/json` untuk client lama
+  - `multipart/form-data` untuk edit profile dengan upload foto
+- Request Body JSON:
 ```json
 {
-  "username": "string",
+  "namaLengkap": "string",
   "email": "string",
-  "password": "string"
+  "password": "string",
+  "profilePicture": "string",
+  "institusi": "string",
+  "bio": "string",
+  "keahlian": ["string"],
+  "lokasi": "string",
+  "whatsapp": "string",
+  "instagram": "string",
+  "facebook": "string",
+  "linkedin": "string"
 }
 ```
+
+- Request Body multipart/form-data:
+  - `namaLengkap`: string
+  - `email`: string
+  - `password`: string
+  - `profilePicture`: string URL opsional
+  - `profilePictureFile`: file gambar opsional, diprioritaskan jika ada
+  - `institusi`: string
+  - `bio`: string
+  - `keahlian`: repeated field / list string
+  - `lokasi`: string
+  - `whatsapp`: string
+  - `instagram`: string
+  - `facebook`: string
+  - `linkedin`: string
+
+- Catatan:
+  - Minimal satu field harus dikirim.
+  - Jika `profilePictureFile` dikirim, backend akan menyimpan file ke `uploads/profile/` dan mengembalikan URL publiknya.
+  - Jika hanya `profilePicture` string yang dikirim, nilai tersebut akan disimpan apa adanya.
 
 ## Auth Linking Notes
 - `email` adalah unique identifier utama untuk semua metode login.
@@ -162,8 +194,17 @@
   "message": "Update user successful",
   "data": {
     "userId": "number",
-    "username": "string",
+    "namaLengkap": "string",
     "email": "string",
+    "profilePicture": "string",
+    "institusi": "string",
+    "bio": "string",
+    "keahlian": ["string"],
+    "lokasi": "string",
+    "whatsapp": "string",
+    "instagram": "string",
+    "facebook": "string",
+    "linkedin": "string",
     "token": "string",
     "expiredAt": "number"
   }

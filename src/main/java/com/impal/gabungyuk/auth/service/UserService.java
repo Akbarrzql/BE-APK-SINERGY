@@ -9,6 +9,7 @@ import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.auth.respository.UserRepository;
 import com.impal.gabungyuk.core.security.BCrypt;
 import com.impal.gabungyuk.core.service.TokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,9 @@ public class UserService {
                 .keahlian(serializeKeahlian(request.getKeahlian()))
                 .lokasi(request.getLokasi())
                 .whatsapp(request.getWhatsapp())
+                .instagram(request.getInstagram())
+                .facebook(request.getFacebook())
+                .linkedin(request.getLinkedin())
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -197,6 +201,9 @@ public class UserService {
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .email(user.getEmail())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .build();
     }
 
@@ -222,7 +229,8 @@ public class UserService {
         boolean hasLinkedin = request.getLinkedin() != null;
         // Validasi minimal ada satu field yang dikirim (bisa berupa string kosong)
         if (!hasNamaLengkap && !hasEmail && !hasPassword && !hasProfilePicture
-                && !hasInstitusi && !hasBio && !hasKeahlian && !hasLokasi && !hasWhatsapp) {
+                && !hasProfilePictureFile && !hasInstitusi && !hasBio && !hasKeahlian
+                && !hasLokasi && !hasWhatsapp && !hasInstagram && !hasFacebook && !hasLinkedin) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
         }
 
@@ -331,6 +339,9 @@ public class UserService {
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
                 .expiredAt(expiredAt)
                 .build();
@@ -347,9 +358,56 @@ public class UserService {
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
+                .instagram(user.getInstagram())
+                .facebook(user.getFacebook())
+                .linkedin(user.getLinkedin())
                 .token(token)
                 .expiredAt(expiredAt)
                 .build();
+    }
+
+    private String uploadProfilePicture(HttpServletRequest requestHttp, MultipartFile profilePictureFile) {
+        try {
+            if (requestHttp == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request context is required for file upload");
+            }
+
+            String uploadDir = "uploads/profile/";
+            java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
+
+            if (!java.nio.file.Files.exists(uploadPath)) {
+                java.nio.file.Files.createDirectories(uploadPath);
+            }
+
+            String originalFilename = profilePictureFile.getOriginalFilename();
+            if (originalFilename == null || originalFilename.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profile picture filename is invalid");
+            }
+
+            String safeFileName = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String fileName = System.currentTimeMillis() + "_" + safeFileName;
+            java.nio.file.Path filePath = uploadPath.resolve(fileName);
+
+            java.nio.file.Files.copy(
+                    profilePictureFile.getInputStream(),
+                    filePath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            );
+
+            return getBaseUrl(requestHttp) + "/uploads/profile/" + fileName;
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload profile picture");
+        }
+    }
+
+    private String getBaseUrl(HttpServletRequest requestHttp) {
+        return requestHttp.getScheme()
+                + "://"
+                + requestHttp.getServerName()
+                + ":"
+                + requestHttp.getServerPort();
     }
 
     private List<String> parseKeahlian(String keahlian) {

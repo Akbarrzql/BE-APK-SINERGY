@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 public class UserController {
 
     private final UserService userService;
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     public UserController(UserService userService) {
         this.userService = userService;
@@ -114,6 +115,7 @@ public class UserController {
                 profilePicture
         );
 
+    private SuccessResponse<AuthUserResponse> buildUpdateUserResponse(AuthUserResponse response) {
         return SuccessResponse.<AuthUserResponse>builder()
                 .status(200)
                 .message("Update user successful")

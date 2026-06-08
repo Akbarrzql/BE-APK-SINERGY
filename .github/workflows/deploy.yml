@@ -17,9 +17,13 @@ jobs:
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
+            set -e
+
             cd /opt/BE-APK-SINERGY
 
             git pull origin main
+
+            mvn clean package -DskipTests
 
             cd /app
 

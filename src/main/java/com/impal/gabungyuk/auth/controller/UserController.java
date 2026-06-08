@@ -7,8 +7,10 @@ import com.impal.gabungyuk.auth.model.request.UpdateUserRequest;
 import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.core.model.SuccessResponse;
 import com.impal.gabungyuk.auth.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 public class UserController {
@@ -86,13 +88,26 @@ public class UserController {
     @RequestMapping(
             value = "/api/v1/update/users/current",
             method = {RequestMethod.PATCH, RequestMethod.PUT},
-            consumes = MediaType.APPLICATION_JSON_VALUE,
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public SuccessResponse<AuthUserResponse> updateUser(@RequestHeader("Authorization") String authorizationHeader,
-                                                        @RequestBody UpdateUserRequest request) {
-        AuthUserResponse response = userService.updateCurrentUser(authorizationHeader, request);
+    public SuccessResponse<AuthUserResponse> updateUserMultipart(
+            HttpServletRequest requestHttp,
+            @RequestHeader("Authorization") String authorizationHeader,
+            @ModelAttribute UpdateUserRequest request,
+            @RequestPart(value = "profilePictureFile", required = false) MultipartFile profilePictureFile
+    ) {
+        AuthUserResponse response = userService.updateCurrentUser(
+                authorizationHeader,
+                request,
+                requestHttp,
+                profilePictureFile
+        );
 
+        return buildUpdateUserResponse(response);
+    }
+
+    private SuccessResponse<AuthUserResponse> buildUpdateUserResponse(AuthUserResponse response) {
         return SuccessResponse.<AuthUserResponse>builder()
                 .status(200)
                 .message("Update user successful")

@@ -9,12 +9,14 @@ import com.impal.gabungyuk.auth.model.response.AuthUserResponse;
 import com.impal.gabungyuk.auth.respository.UserRepository;
 import com.impal.gabungyuk.core.security.BCrypt;
 import com.impal.gabungyuk.core.service.TokenService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 @Service
 public class UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private static final String PROVIDER_MANUAL = "manual";
     private static final String PROVIDER_GOOGLE = "google";
     private static final String PROVIDER_BOTH = "both";
@@ -61,9 +64,6 @@ public class UserService {
                 .keahlian(serializeKeahlian(request.getKeahlian()))
                 .lokasi(request.getLokasi())
                 .whatsapp(request.getWhatsapp())
-                .instagram(request.getInstagram())
-                .facebook(request.getFacebook())
-                .linkedin(request.getLinkedin())
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -201,14 +201,15 @@ public class UserService {
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
                 .email(user.getEmail())
-                .instagram(user.getInstagram())
-                .facebook(user.getFacebook())
-                .linkedin(user.getLinkedin())
                 .build();
     }
 
     @Transactional
     public AuthUserResponse updateCurrentUser(String authorizationHeader, UpdateUserRequest request, MultipartFile profilePicture) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
+        }
+
         Integer userId = tokenService.extractUserIdFromAuthorizationHeader(authorizationHeader);
 
         User user = userRepository.findById(userId)
@@ -219,6 +220,7 @@ public class UserService {
         boolean hasEmail = request.getEmail() != null;
         boolean hasPassword = request.getPassword() != null;
         boolean hasProfilePicture = profilePicture != null && !profilePicture.isEmpty();
+        boolean hasProfilePictureUrl = request.getProfilePicture() != null;
         boolean hasInstitusi = request.getInstitusi() != null;
         boolean hasBio = request.getBio() != null;
         boolean hasKeahlian = request.getKeahlian() != null;
@@ -229,7 +231,7 @@ public class UserService {
         boolean hasLinkedin = request.getLinkedin() != null;
         // Validasi minimal ada satu field yang dikirim (bisa berupa string kosong)
         if (!hasNamaLengkap && !hasEmail && !hasPassword && !hasProfilePicture
-                && !hasProfilePictureFile && !hasInstitusi && !hasBio && !hasKeahlian
+                && !hasProfilePictureUrl && !hasInstitusi && !hasBio && !hasKeahlian
                 && !hasLokasi && !hasWhatsapp && !hasInstagram && !hasFacebook && !hasLinkedin) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one field must be provided");
         }
@@ -269,12 +271,12 @@ public class UserService {
 
                 user.setProfilePicture("/uploads/profile/" + fileName);
             } catch (Exception e) {
-                e.printStackTrace();
+                log.warn("Failed to upload profile picture: {}", e.getMessage(), e);
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Failed to upload profile picture: " + e.getMessage());
             }
-        } else {
-            user.setProfilePicture(null);
+        } else if (hasProfilePictureUrl) {
+            user.setProfilePicture(request.getProfilePicture().trim());
         }
 
         // Bagian di bawah ini sekarang bisa menerima string kosong untuk mengosongkan data di DB
@@ -333,15 +335,12 @@ public class UserService {
                 .userId(user.getIdPengguna())
                 .namaLengkap(user.getNamaLengkap())
                 .email(user.getEmail())
-                .profilePicture(user.getProfilePicture())
+                .profilePicture(normalizeProfilePictureUrl(user.getProfilePicture()))
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
-                .instagram(user.getInstagram())
-                .facebook(user.getFacebook())
-                .linkedin(user.getLinkedin())
                 .token(tokenService.generateToken(user.getIdPengguna(), expiredAt))
                 .expiredAt(expiredAt)
                 .build();
@@ -352,62 +351,15 @@ public class UserService {
                 .userId(user.getIdPengguna())
                 .namaLengkap(user.getNamaLengkap())
                 .email(user.getEmail())
-                .profilePicture(user.getProfilePicture())
+                .profilePicture(normalizeProfilePictureUrl(user.getProfilePicture()))
                 .institusi(user.getInstitusi())
                 .bio(user.getBio())
                 .keahlian(parseKeahlian(user.getKeahlian()))
                 .lokasi(user.getLokasi())
                 .whatsapp(user.getWhatsapp())
-                .instagram(user.getInstagram())
-                .facebook(user.getFacebook())
-                .linkedin(user.getLinkedin())
                 .token(token)
                 .expiredAt(expiredAt)
                 .build();
-    }
-
-    private String uploadProfilePicture(HttpServletRequest requestHttp, MultipartFile profilePictureFile) {
-        try {
-            if (requestHttp == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request context is required for file upload");
-            }
-
-            String uploadDir = "uploads/profile/";
-            java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
-
-            if (!java.nio.file.Files.exists(uploadPath)) {
-                java.nio.file.Files.createDirectories(uploadPath);
-            }
-
-            String originalFilename = profilePictureFile.getOriginalFilename();
-            if (originalFilename == null || originalFilename.isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profile picture filename is invalid");
-            }
-
-            String safeFileName = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
-            String fileName = System.currentTimeMillis() + "_" + safeFileName;
-            java.nio.file.Path filePath = uploadPath.resolve(fileName);
-
-            java.nio.file.Files.copy(
-                    profilePictureFile.getInputStream(),
-                    filePath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
-            );
-
-            return getBaseUrl(requestHttp) + "/uploads/profile/" + fileName;
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload profile picture");
-        }
-    }
-
-    private String getBaseUrl(HttpServletRequest requestHttp) {
-        return requestHttp.getScheme()
-                + "://"
-                + requestHttp.getServerName()
-                + ":"
-                + requestHttp.getServerPort();
     }
 
     private List<String> parseKeahlian(String keahlian) {
@@ -433,6 +385,29 @@ public class UserService {
                 .collect(Collectors.joining(","));
 
         return joined.isBlank() ? null : joined;
+    }
+
+    private String normalizeProfilePictureUrl(String profilePicture) {
+        if (profilePicture == null || profilePicture.isBlank()) {
+            return null;
+        }
+
+        String trimmed = profilePicture.trim();
+
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+
+        if (trimmed.startsWith("/")) {
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(trimmed)
+                    .toUriString();
+        }
+
+        return ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/")
+                .path(trimmed)
+                .toUriString();
     }
 
     private String normalizeEmail(String email) {
